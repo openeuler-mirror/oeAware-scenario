@@ -13,12 +13,12 @@
 #include "scenario.h"
 #include <vector>
 #include <fstream>
+#include <cstring>
 
-char *THREAD_SCENARIO = "thread_scenario";
-char *THREAD_DEPS = "thread_collector";
+char name[] = "thread_scenario";
+char dep[] = "thread_collector";
 const std::string CONFIG_PATH = "/usr/lib64/oeAware-plugin/scenario/thread_scenario.ini";
 const int CYCLE_SIZE = 100;
-
 static std::vector<ThreadInfo> thread_info(THREAD_NUM);
 static DataHeader data_header;
 static DataBuf data_buf;
@@ -41,7 +41,7 @@ char* get_version() {
 }
 
 char* get_name() {
-    return THREAD_SCENARIO;
+    return name;
 }
 
 char* get_description() {
@@ -49,7 +49,7 @@ char* get_description() {
 }
 
 char* get_dep() {
-    return THREAD_DEPS;
+    return dep;
 }
 
 int get_cycle() {
@@ -67,6 +67,7 @@ void disable() {
 }
 
 void aware(void *info[], int len) {
+    if (len != 1) return;
     data_header.index++;
     data_header.count++;
     int index = data_header.count % data_header.buf_len;
@@ -76,7 +77,7 @@ void aware(void *info[], int len) {
     ThreadInfo *data = (ThreadInfo*)buf.data;
     int cnt = 0;
     for (int i = 0; i < buf.len; ++i) {
-        for (int j = 0; j < key_list.size(); ++j) {
+        for (size_t j = 0; j < key_list.size(); ++j) {
             if (data[i].name == key_list[j] && cnt < THREAD_NUM) {
                 thread_info[cnt].name = data[i].name;
                 thread_info[cnt].tid = data[i].tid;
