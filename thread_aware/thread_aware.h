@@ -13,10 +13,7 @@
 #define THREAD_AWARE_H
 #include <string>
 
-#define DATA_HEADER_TYPE_SIZE 64
-
 const int THREAD_NUM = 65536;
-const int DATA_BUF_DEFAULT_SIZE = 20;
 
 struct ThreadInfo {
     int pid;
@@ -24,17 +21,5 @@ struct ThreadInfo {
     std::string name;
 };
 
-struct DataBuf {
-    int len;
-    void *data;
-};
-
-struct DataHeader {
-    char type[DATA_HEADER_TYPE_SIZE];              // collector type
-    int index;                                     // buf write index, initial value is -1
-    uint64_t count;                                // collector times
-    struct DataBuf *buf;
-    int buf_len;
-};
 
 #endif // !THREAD_AWARE_H
