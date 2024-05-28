@@ -17,10 +17,10 @@
 
 char name[] = "thread_scenario";
 char dep[] = "thread_collector";
-const std::string CONFIG_PATH = "/usr/lib64/oeAware-plugin/scenario/thread_scenario.ini";
+const std::string CONFIG_PATH = "/usr/lib64/oeAware-plugin/thread_scenario.ini";
 const int CYCLE_SIZE = 100;
 static std::vector<ThreadInfo> thread_info(THREAD_NUM);
-static DataHeader data_header;
+static DataRingBuf data_ring_buf;
 static DataBuf data_buf;
 static std::vector<std::string> key_list;
 
@@ -36,43 +36,48 @@ static void read_key_list(const std::string &file_name) {
     file.close();
 }
 
-char* get_version() {
+const char* get_version() {
     return nullptr;
 }
 
-char* get_name() {
+const char* get_name() {
     return name;
 }
 
-char* get_description() {
+const char* get_description() {
     return nullptr;
 }
 
-char* get_dep() {
+const char* get_dep() {
     return dep;
 }
 
-int get_cycle() {
+int get_period() {
     return CYCLE_SIZE;
 }
 
-void enable() {
-    data_header.buf_len = 1;
-    data_header.buf = &data_buf;
+int get_priority() {
+    return 1;
+}
+
+bool enable() {
+    data_ring_buf.buf_len = 1;
+    data_ring_buf.buf = &data_buf;
     read_key_list(CONFIG_PATH);
+    return true;
 }
 
 void disable() {
 
 }
 
-void aware(void *info[], int len) {
-    if (len != 1) return;
-    data_header.index++;
-    data_header.count++;
-    int index = data_header.count % data_header.buf_len;
+void run(const Param *param) {
+    if (param->len != 1) return;
+    data_ring_buf.index++;
+    data_ring_buf.count++;
+    int index = data_ring_buf.count % data_ring_buf.buf_len;
     
-    DataHeader *header = (DataHeader*)info[0];
+    auto *header = param->ring_bufs[0];
     DataBuf buf = header->buf[header->count % header->buf_len];
     ThreadInfo *data = (ThreadInfo*)buf.data;
     int cnt = 0;
@@ -89,26 +94,28 @@ void aware(void *info[], int len) {
     }
     data_buf.len = cnt;
     data_buf.data = thread_info.data();
-    data_header.buf[index] = data_buf;
+    data_ring_buf.buf[index] = data_buf;
 }
 
-void* get_ring_buf() {
-    return (void*)&data_header;
+const DataRingBuf* get_ring_buf() {
+    return &data_ring_buf;
 }
 
-static struct ScenarioInterface aware_interface = {
+static struct Interface aware_interface = {
     .get_version = get_version,
     .get_name = get_name,
     .get_description = get_description,
     .get_dep = get_dep,
-    .get_cycle = get_cycle,
+    .get_priority = get_priority,
+    .get_type = nullptr,
+    .get_period = get_period,
     .enable = enable,
     .disable = disable,
-    .aware = aware,
     .get_ring_buf = get_ring_buf,
+    .run = run,
 };
 
-extern "C" int get_instance(ScenarioInterface **ins) {
+extern "C" int get_instance(Interface **ins) {
     *ins = &aware_interface;
     return 1;
 }
