@@ -61,6 +61,8 @@ int get_priority() {
 }
 
 bool enable() {
+    data_ring_buf.index = -1;
+    data_ring_buf.count = 0;
     data_ring_buf.buf_len = 1;
     data_ring_buf.buf = &data_buf;
     read_key_list(CONFIG_PATH);
@@ -68,15 +70,13 @@ bool enable() {
 }
 
 void disable() {
-
+    key_list.clear();
 }
 
 void run(const Param *param) {
     if (param->len != 1) return;
-    data_ring_buf.index++;
     data_ring_buf.count++;
-    int index = data_ring_buf.count % data_ring_buf.buf_len;
-    
+    int index = (data_ring_buf.index + 1) % data_ring_buf.buf_len;
     auto *header = param->ring_bufs[0];
     DataBuf buf = header->buf[header->count % header->buf_len];
     ThreadInfo *data = (ThreadInfo*)buf.data;
@@ -95,6 +95,7 @@ void run(const Param *param) {
     data_buf.len = cnt;
     data_buf.data = thread_info.data();
     data_ring_buf.buf[index] = data_buf;
+    data_ring_buf.index = index;
 }
 
 const DataRingBuf* get_ring_buf() {
