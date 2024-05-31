@@ -11,34 +11,63 @@
  ******************************************************************************/
 #ifndef __OEAWARE_COMMON__
 #define __OEAWARE_COMMON__
+#include <stdbool.h>
 #include <stdint.h>
 
-#define DATA_HEADER_TYPE_SIZE 64
-
-struct ScenarioInterface {
-    char *(*get_version)();
-    char *(*get_name)();
-    char *(*get_description)();
-    char *(*get_dep)();
-    int (*get_cycle)();
-    void (*enable)();
-    void (*disable)();
-    void (*aware)(void *[], int);
-    void *(*get_ring_buf)();
-};
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct DataBuf {
     int len;
     void *data;
 };
 
-struct DataHeader {
-    char type[DATA_HEADER_TYPE_SIZE];
-    int index = -1;
+struct DataRingBuf {
+    /* instance name */
+    const char *instance_name;
+    /* buf write index, initial value is -1 */
+    int index;
+    /* instance run times */
     uint64_t count;
     struct DataBuf *buf;
     int buf_len;
 };
 
+struct Param {
+    const struct DataRingBuf **ring_bufs;
+    int len;
+};
+
+struct Interface {
+    const char* (*get_version)();
+    /* The instance name is a unique identifier in the system. */
+    const char* (*get_name)();
+    const char* (*get_description)();
+    /* Specifies the instance dependencies, which is used as the input information
+     * for instance execution.
+     */
+    const char* (*get_dep)();
+    /* Instance scheduling priority. In a uniform time period, a instance with a
+     * lower priority is scheduled first.
+     */
+    int (*get_priority)();
+    int (*get_type)();
+    /* Instance execution period. */
+    int (*get_period)();
+    bool (*enable)();
+    void (*disable)();
+    const struct DataRingBuf* (*get_ring_buf)();
+    void (*run)(const struct Param*);
+};
+
+/* Obtains the instances from the plugin.
+ * The return value is the number of instances.
+ */
+int get_instance(struct Interface **interface);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -16,34 +16,40 @@
 #include "collector.h"
 
 #define UNCORE_SCENARIO_BUF_NUM 1
-struct DataHeader g_uncore_scenario_buf = { 0 };
+struct DataRingBuf g_uncore_scenario_buf = { 0, 0, 0, 0, 0};
 uint64_t g_pmu_uncore_buf_cnt = 0;
-char *get_version()
+
+const char *get_version()
 {
     return "v1.0";
 }
 
-char *get_description()
+const char *get_name()
 {
     return "scenario_example";
 }
 
-char *get_name()
+const char *get_description()
 {
     return "scenario_example";
 }
 
-char *get_dep()
+const char *get_dep()
 {
-    return "collector_pmu_uncore";
+    return PMU_UNCORE;
 }
 
-int get_cycle()
+int get_priority()
+{
+    return 1;
+}
+
+int get_period()
 {
     return 1000;
 }
 
-void enable()
+bool enable()
 {
     if (g_uncore_scenario_buf.buf == NULL) {
         g_uncore_scenario_buf.buf = (struct DataBuf *)malloc(sizeof(struct DataBuf) * UNCORE_SCENARIO_BUF_NUM);
@@ -51,41 +57,43 @@ void enable()
         g_uncore_scenario_buf.index = -1;
         g_uncore_scenario_buf.count = 0;
     }
+
+    return true;
 }
+
 void disable()
 {
 
 }
 
-void aware(void *info[], int len)
+void run(const struct Param *para)
 {
     Scenario &ins = Scenario::getInstance();
     ins.system_loop_init();
 
-    for (int i = 0; i < len; i++) {
-        struct DataHeader *header = (struct DataHeader *)info[i];
-        if (strcmp(header->type, PMU_UNCORE) == 0) {
-            int dataNum = std::min(header->count - g_pmu_uncore_buf_cnt, (uint64_t)header->buf_len);
+    for (int i = 0; i < para->len; i++) {
+        struct DataRingBuf *ringbuf = (struct DataRingBuf *)para->ring_bufs[i];
+        if (strcmp(ringbuf->instance_name, PMU_UNCORE) == 0) {
+            int dataNum = std::min(ringbuf->count - g_pmu_uncore_buf_cnt, (uint64_t)ringbuf->buf_len);
             struct DataBuf *buf = nullptr;
             for (int n = 0; n < dataNum; n++) {
-                int offset = (header->index + header->buf_len - n) % header->buf_len;
-                buf = &header->buf[offset];
+                int offset = (ringbuf->index + ringbuf->buf_len - n) % ringbuf->buf_len;
+                buf = &ringbuf->buf[offset];
                 ins.system_uncore_update((PmuData *)buf->data, buf->len);
             }
             if (dataNum > 0) {
                 ins.access_buf_updata();
             }
-            g_pmu_uncore_buf_cnt = header->count;
+            g_pmu_uncore_buf_cnt = ringbuf->count;
         }
     }
 }
 
-void *get_ring_buf()
+const struct DataRingBuf *get_ring_buf()
 {
     Scenario &ins = Scenario::getInstance();
     const ScenarioBuf access_buf = ins.get_scenario_buf(SBT_ACCESS);
-    struct DataHeader header;
-    strcpy(g_uncore_scenario_buf.type, SCENARIO_ACCESS_BUF);
+    g_uncore_scenario_buf.instance_name = SCENARIO_ACCESS_BUF;
     g_uncore_scenario_buf.index++;
     g_uncore_scenario_buf.index %= UNCORE_SCENARIO_BUF_NUM;
     g_uncore_scenario_buf.count++;
@@ -94,24 +102,26 @@ void *get_ring_buf()
     g_uncore_scenario_buf.buf->len = access_buf.bufLen;
     g_uncore_scenario_buf.buf->data = access_buf.buf;
 
-    return (void *)&g_uncore_scenario_buf;
+    return &g_uncore_scenario_buf;
 }
 
-struct ScenarioInterface aware_interface = {
+struct Interface aware_interface = {
     .get_version = get_version,
     .get_name = get_name,
     .get_description = get_description,
     .get_dep = get_dep,
-    .get_cycle = get_cycle,
+    .get_priority = get_priority,
+    .get_type = nullptr,
+    .get_period = get_period,
     .enable = enable,
     .disable = disable,
-    .aware = aware,
     .get_ring_buf = get_ring_buf,
+    .run = run,
 };
 
-extern "C" int get_instance(ScenarioInterface * *ins)
+extern "C" int get_instance(struct Interface **interface)
 {
-    *ins = &aware_interface;
+    *interface = &aware_interface;
     return 1;
 }
 
