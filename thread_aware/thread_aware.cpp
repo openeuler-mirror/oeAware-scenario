@@ -17,7 +17,7 @@
 
 char name[] = "thread_scenario";
 char dep[] = "thread_collector";
-const std::string CONFIG_PATH = "/usr/lib64/oeAware-plugin/thread_scenario.ini";
+const std::string CONFIG_PATH = "/usr/lib64/oeAware-plugin/thread_scenario.conf";
 const int CYCLE_SIZE = 100;
 static std::vector<ThreadInfo> thread_info(THREAD_NUM);
 static DataRingBuf data_ring_buf;
