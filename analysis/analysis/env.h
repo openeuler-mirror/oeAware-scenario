@@ -23,7 +23,8 @@ private:
     Env() = default;
     ~Env() = default;
 public:
-    static Env &getInstance() {
+    static Env &GetInstance()
+    {
         static Env instance;
         return instance;
     }
@@ -37,8 +38,8 @@ public:
     std::vector<std::vector<int>> distance;
     int maxDistance;
     int diffDistance;
-    bool init();
-    void initDistance();
+    bool Init();
+    void InitDistance();
 };
 
 #endif

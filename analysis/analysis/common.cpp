@@ -12,7 +12,8 @@
 #include "common.h"
 #include <iostream>
 
-void traceInfoSummary(const std::vector<TaskInfo> &infos, TaskInfo &summary) {
+void TraceInfoSummary(const std::vector<TaskInfo> &infos, TaskInfo &summary)
+{
     for (auto &info : infos) {
         for (size_t i = 0; i < info.access.size(); i++) {
             for (size_t j = 0; j < info.access[i].size(); j++) {
@@ -22,24 +23,27 @@ void traceInfoSummary(const std::vector<TaskInfo> &infos, TaskInfo &summary) {
         summary.cycles += info.cycles;
     }
     summary.loopCnt = infos.size();
-    summary.calculateNumaScore();
+    summary.CalculateNumaScore();
 }
 
-TaskInfo::TaskInfo() {
-    init();
+TaskInfo::TaskInfo()
+{
+    Init();
 }
 
-void TaskInfo::init() {
+void TaskInfo::Init()
+{
     loopCnt = 0;
-    int numaNum = Env::getInstance().numaNum;
+    int numaNum = Env::GetInstance().numaNum;
     access.resize(numaNum);
     for (int i = 0; i < numaNum; i++) {
         access[i].resize(numaNum);
     }
 }
 
-void TaskInfo::calculateNumaScore() {
-    Env &env = Env::getInstance();
+void TaskInfo::CalculateNumaScore()
+{
+    Env &env = Env::GetInstance();
     accessCost = 0;
     accessSum = 0;
     for (int i = 0; i < env.numaNum; i++) {
@@ -48,10 +52,12 @@ void TaskInfo::calculateNumaScore() {
             accessSum += access[i][j];
         }
     }
-    numaScore = accessSum == 0 ? 0.0 : (accessSum * env.maxDistance - accessCost) * 1.0 / (accessSum * env.diffDistance);
+    numaScore = accessSum == 0 ? 0.0 \
+        : (accessSum * env.maxDistance - accessCost) * 1.0 / (accessSum * env.diffDistance);
 }
 
-void TaskInfo::clearData() {
+void TaskInfo::ClearData()
+{
     for (auto &tmp : access) {
         for (auto &i : tmp) { i = 0; }
     }
@@ -61,7 +67,8 @@ void TaskInfo::clearData() {
     accessCost = 0;
 }
 
-void Proc::summaryThreads() {
+void Proc::SummaryThreads()
+{
     for (auto &t : threads) {
         auto &thread = t.second;
         for (size_t i = 0; i < thread.realtimeInfo.access.size(); i++) {
@@ -73,30 +80,34 @@ void Proc::summaryThreads() {
     }
 }
 
-void Proc::calculateNumaScore() {
+void Proc::CalculateNumaScore()
+{
     for (auto &thread : threads) {
-        thread.second.realtimeInfo.calculateNumaScore();
+        thread.second.realtimeInfo.CalculateNumaScore();
     }
-    realtimeInfo.calculateNumaScore();
+    realtimeInfo.CalculateNumaScore();
 }
 
-void Proc::clearRealtimeInfo() {
+void Proc::ClearRealtimeInfo()
+{
     for (auto &t : threads) {
         auto &thread = t.second;
-        thread.realtimeInfo.clearData();
+        thread.realtimeInfo.ClearData();
     }
-    realtimeInfo.clearData();
+    realtimeInfo.ClearData();
 }
 
-void SystemInfo::init() {
-    realtimeInfo.init();
-    summaryInfo.init();
+void SystemInfo::Init()
+{
+    realtimeInfo.Init();
+    summaryInfo.Init();
 }
 
-void SystemInfo::summaryProcs() {
+void SystemInfo::SummaryProcs()
+{
     for (auto &proc_item : procs) {
         auto &proc = proc_item.second;
-        proc.summaryThreads();
+        proc.SummaryThreads();
         for (size_t i = 0; i < proc.realtimeInfo.access.size(); i++) {
             for (size_t j = 0; j < proc.realtimeInfo.access[i].size(); j++) {
                 realtimeInfo.access[i][j] += proc.realtimeInfo.access[i][j];
@@ -106,15 +117,17 @@ void SystemInfo::summaryProcs() {
     }
 }
 
-void SystemInfo::calculateNumaScore() {
+void SystemInfo::CalculateNumaScore()
+{
     for (auto &proc_item : procs) {
         auto &proc = proc_item.second;
-        proc.calculateNumaScore();
+        proc.CalculateNumaScore();
     }
-    realtimeInfo.calculateNumaScore();
+    realtimeInfo.CalculateNumaScore();
 }
 
-void SystemInfo::setLoopCnt(uint64_t loopCnt) {
+void SystemInfo::SetLoopCnt(uint64_t loopCnt)
+{
     for (auto &proc_item : procs) {
         auto &proc = proc_item.second;
         for (auto &thread_item : proc.threads) {
@@ -126,15 +139,17 @@ void SystemInfo::setLoopCnt(uint64_t loopCnt) {
     realtimeInfo.loopCnt = loopCnt;
 }
 
-void SystemInfo::clearRealtimeInfo() {
+void SystemInfo::ClearRealtimeInfo()
+{
     for (auto &proc_item : procs) {
-        proc_item.second.clearRealtimeInfo();
+        proc_item.second.ClearRealtimeInfo();
     }
 
-    realtimeInfo.clearData();
+    realtimeInfo.ClearData();
 }
 
-void SystemInfo::appendTraceInfo() {
+void SystemInfo::AppendTraceInfo()
+{
     for (auto &proc_item : procs) {
         auto &proc = proc_item.second;
         for (auto &thread_item : proc.threads) {
@@ -146,21 +161,23 @@ void SystemInfo::appendTraceInfo() {
     traceInfo.emplace_back(realtimeInfo);
 }
 
-void SystemInfo::traceInfoSummary() {
+void SystemInfo::TraceInfoSummary()
+{
     for (auto &proc_item : procs) {
         auto &proc = proc_item.second;
         for (auto &thread_item : proc.threads) {
             auto thread = thread_item.second;
-            ::traceInfoSummary(thread.traceInfo, thread.summaryInfo);
+            ::TraceInfoSummary(thread.traceInfo, thread.summaryInfo);
         }
-        ::traceInfoSummary(proc.traceInfo, proc.summaryInfo);
+        ::TraceInfoSummary(proc.traceInfo, proc.summaryInfo);
     }
-    ::traceInfoSummary(traceInfo, summaryInfo);
+    ::TraceInfoSummary(traceInfo, summaryInfo);
 }
 
-void SystemInfo::reset() {
+void SystemInfo::Reset()
+{
     procs.clear();
-    realtimeInfo.clearData();
-    summaryInfo.clearData();
+    realtimeInfo.ClearData();
+    summaryInfo.ClearData();
     traceInfo.clear();
 }

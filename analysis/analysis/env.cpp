@@ -12,12 +12,13 @@
 #include "env.h"
 #include <numa.h>
 #include<unistd.h>
-unsigned long getPageMask() {
+unsigned long GetPageMask()
+{
     static unsigned long pageMask = 0;
     if (pageMask == 0) {
-        int page_size = sysconf(_SC_PAGE_SIZE);
-        if (page_size > 0) {
-            pageMask = ~((unsigned long)page_size - 1);
+        int pageSize = sysconf(_SC_PAGE_SIZE);
+        if (pageSize > 0) {
+            pageMask = ~(static_cast<unsigned long>(pageSize) - 1);
         } else {
             pageMask = ~0xFFF;
         }
@@ -26,7 +27,8 @@ unsigned long getPageMask() {
     return pageMask;
 }
 
-bool Env::init() {
+bool Env::Init()
+{
     numaNum = numa_num_configured_nodes();
     cpuNum = sysconf(_SC_NPROCESSORS_CONF);
     cpu2Node.resize(cpuNum, -1);
@@ -42,12 +44,13 @@ bool Env::init() {
     }
     numa_free_nodemask(cpumask);
 
-    pageMask = getPageMask();
-    initDistance();
+    pageMask = GetPageMask();
+    InitDistance();
     return true;
 }
 
-void Env::initDistance() {
+void Env::InitDistance()
+{
     maxDistance = 0;
     distance.resize(numaNum, std::vector<int>(numaNum, 0));
     for (int i = 0; i < numaNum; ++i) {
