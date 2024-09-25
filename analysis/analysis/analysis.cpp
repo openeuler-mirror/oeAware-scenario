@@ -17,42 +17,50 @@
 #include <iomanip>
 #include <cmath>
 const int TUNE_PID_LOW_BOUND = 1000;
-
-static bool validPmu(const PmuData &data) {
+const uint64_t ACCESS_THRESHOLD = 200;
+const float NUMA_SCORE_THRESHOLD = 0.95;
+static bool IsValidPmu(const PmuData &data)
+{
     return data.pid > TUNE_PID_LOW_BOUND && data.tid > TUNE_PID_LOW_BOUND;
 }
 
-static bool validSpe(const PmuData &data) {
-    return validPmu(data) && (data.ext->event & 0x200) != 0;  // 0x200 later change to enum value
+static bool IsValidSpe(const PmuData &data)
+{
+    return IsValidPmu(data) && (data.ext->event & 0x200) != 0;  // 0x200 later change to enum value
 }
 
-int Analysis::getPeriod() {
-    return 1000;
+int Analysis::GetPeriod()
+{
+    return 1000; // 1000 ms
 }
 
-void Analysis::init() {
-    env.init();
-    instanceInit();
-    sysInfo.init();  // initialized after env init
+void Analysis::Init()
+{
+    env.Init();
+    InstanceInit();
+    sysInfo.Init();  // initialized after env init
     loopCnt = 0;
 }
 
-void Analysis::updatePmu(const std::string &eventName, int dataLen, const PmuData *data) {
+void Analysis::UpdatePmu(const std::string &eventName, int dataLen, const PmuData *data)
+{
     if (eventName == "pmu_spe_sampling") {
-        updateSpe(dataLen, data);
-        updateAccess();
+        UpdateSpe(dataLen, data);
+        UpdateAccess();
     }
 }
 
-void Analysis::instanceInit() {
+void Analysis::InstanceInit()
+{
     tuneInstances[NUMA_TUNE].name = "tune_numa_mem_access";
     tuneInstances[IRQ_TUNE].name = "tune_irq";
 }
 
-void Analysis::updateSpe(int dataLen, const PmuData *data) {
+void Analysis::UpdateSpe(int dataLen, const PmuData *data)
+{
     auto &procs = sysInfo.procs;
     for (int i = 0; i < dataLen; i++) {
-        if (!validSpe(data[i])) {
+        if (!IsValidSpe(data[i])) {
             continue;
         }
         procs[data[i].pid].pageVa.push_back((void *)data[i].ext->va);
@@ -61,9 +69,9 @@ void Analysis::updateSpe(int dataLen, const PmuData *data) {
     }
 }
 
-void Analysis::updateAccess() {
-    unsigned long pageMask = env.pageMask;
-    const std::vector<int> &cpu2Node = Env::getInstance().cpu2Node;
+void Analysis::UpdateAccess()
+{
+    const std::vector<int> &cpu2Node = Env::GetInstance().cpu2Node;
     auto &procs = sysInfo.procs;
     for (auto &proc_item : procs) {
         auto &proc = proc_item.second;
@@ -72,7 +80,6 @@ void Analysis::updateAccess() {
         std::vector<int> node_id(buff_len);
         long ret = move_pages(pid, buff_len, proc.pageVa.data(), nullptr, node_id.data(), MPOL_MF_MOVE_ALL);
         if (ret == 0) {
-            unsigned long pa = 0;
             for (size_t i = 0; i < buff_len; ++i) {
                 if (node_id[i] < 0) {
                     continue;
@@ -85,7 +92,8 @@ void Analysis::updateAccess() {
     }
 }
 
-void Analysis::showSummary() {
+void Analysis::ShowSummary()
+{
     std::cout << "============================ Analysis Summary ==============================" << std::endl;
     std::cout << "| ";
     const int nameWidth = 30;
@@ -105,10 +113,11 @@ void Analysis::showSummary() {
         std::cout << std::left << std::setw(suggestWidth) << (ins.suggest ? "Yes" : "No") << " | ";
         std::cout << std::left << std::setw(notesWidth) << ins.notes << " |" << std::endl;
     }
-    std::cout << "Note : analysis plugin period is " << getPeriod() << "ms, loop " << loopCnt << "times" << std::endl;
+    std::cout << "Note : analysis plugin period is " << GetPeriod() << " ms, loop " << loopCnt << " times" << std::endl;
 }
 
-void Analysis::numaTuneSuggest(const TaskInfo &taskInfo, bool isSummary) {
+void Analysis::NumaTuneSuggest(const TaskInfo &taskInfo, bool isSummary)
+{
     tuneInstances[NUMA_TUNE].suggest = false;
     if (env.numaNum <= 1) {
         tuneInstances[NUMA_TUNE].notes = "No NUMA";
@@ -120,36 +129,40 @@ void Analysis::numaTuneSuggest(const TaskInfo &taskInfo, bool isSummary) {
         return;
     }
     uint64_t accessSum = isSummary ? ceil(taskInfo.accessSum * 1.0 / taskInfo.loopCnt) : taskInfo.accessSum;
-    if (accessSum < 200) {
+    if (accessSum < ACCESS_THRESHOLD) {
         tuneInstances[NUMA_TUNE].notes = "No access";
         return;
     }
-    if (taskInfo.numaScore > 0.95) {
+    if (taskInfo.numaScore > NUMA_SCORE_THRESHOLD) {
         tuneInstances[NUMA_TUNE].notes = "Most local access";
         return;
     }
     tuneInstances[NUMA_TUNE].suggest = true;
     std::ostringstream tmp;
-    tmp << std::fixed << std::setprecision(2) << (1 - taskInfo.numaScore) * 100;
+    // 100 is used for percentage conversion, 2 is used for precision
+    tmp << std::fixed << std::setprecision(2) << ((1 - taskInfo.numaScore) * 100);
     tuneInstances[NUMA_TUNE].notes = "Gap : " + tmp.str() + "%";
 }
 
-void Analysis::summary() {
-    sysInfo.traceInfoSummary();
-    numaTuneSuggest(sysInfo.summaryInfo, true);
+void Analysis::Summary()
+{
+    sysInfo.TraceInfoSummary();
+    NumaTuneSuggest(sysInfo.summaryInfo, true);
 }
 
-void Analysis::analyze() {
-    sysInfo.summaryProcs();
-    sysInfo.calculateNumaScore();
-    sysInfo.setLoopCnt(loopCnt);
-    sysInfo.appendTraceInfo();
-    sysInfo.clearRealtimeInfo();
+void Analysis::Analyze()
+{
+    sysInfo.SummaryProcs();
+    sysInfo.CalculateNumaScore();
+    sysInfo.SetLoopCnt(loopCnt);
+    sysInfo.AppendTraceInfo();
+    sysInfo.ClearRealtimeInfo();
     loopCnt++;
 }
 
-void Analysis::exit() {
-    summary();
-    showSummary();
-    sysInfo.reset();
+void Analysis::Exit()
+{
+    Summary();
+    ShowSummary();
+    sysInfo.Reset();
 }

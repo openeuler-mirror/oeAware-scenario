@@ -35,19 +35,19 @@ private:
     SystemInfo sysInfo;
     std::unordered_map<InstanceName, Instance> tuneInstances;
     uint64_t loopCnt = 0;
-    void instanceInit();
-    void updateSpe(int dataLen, const PmuData *data);
-    void updateAccess();
-    void numaTuneSuggest(const TaskInfo &taskInfo, bool isSummary);
-    void summary();
-    void showSummary();
+    void InstanceInit();
+    void UpdateSpe(int dataLen, const PmuData *data);
+    void UpdateAccess();
+    void NumaTuneSuggest(const TaskInfo &taskInfo, bool isSummary);
+    void Summary();
+    void ShowSummary();
 public:
-    Env &env = Env::getInstance();
-    int getPeriod();
-    void init();
-    void updatePmu(const std::string &eventName, int dataLen, const PmuData *data);
-    void analyze();
-    void exit();
+    Env &env = Env::GetInstance();
+    int GetPeriod();
+    void Init();
+    void UpdatePmu(const std::string &eventName, int dataLen, const PmuData *data);
+    void Analyze();
+    void Exit();
 };
 
 #endif

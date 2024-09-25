@@ -20,21 +20,20 @@
 struct TaskInfo {
     TaskInfo();
     ~TaskInfo() = default;
-    void init();
+    void Init();
     uint64_t loopCnt = 0; // note : loop count means the number of trace in the summary
     float numaScore = 0.0;
     uint64_t cycles = 0;
     uint64_t accessSum = 0;
     uint64_t accessCost = 0;
     std::vector<std::vector<uint64_t>> access;
-    void calculateNumaScore();
-    void clearData();
+    void CalculateNumaScore();
+    void ClearData();
 };
 
 struct Thread {
     int tid = -1;
     unsigned int cpu = 0;
-    int cpu_numa = -1;
     TaskInfo realtimeInfo;
     TaskInfo summaryInfo;
     std::vector<TaskInfo> traceInfo;
@@ -49,9 +48,9 @@ struct Proc {
     TaskInfo realtimeInfo;
     TaskInfo summaryInfo;
     std::vector<TaskInfo> traceInfo;
-    void summaryThreads();
-    void calculateNumaScore();
-    void clearRealtimeInfo();
+    void SummaryThreads();
+    void CalculateNumaScore();
+    void ClearRealtimeInfo();
 };
 
 struct SystemInfo {
@@ -59,14 +58,14 @@ struct SystemInfo {
     TaskInfo realtimeInfo;
     TaskInfo summaryInfo;
     std::vector<TaskInfo> traceInfo;
-    void init();
-    void summaryProcs();
-    void calculateNumaScore();
-    void setLoopCnt(uint64_t loopCnt);
-    void clearRealtimeInfo();
-    void appendTraceInfo();
-    void traceInfoSummary();
-    void reset();
+    void Init();
+    void SummaryProcs();
+    void CalculateNumaScore();
+    void SetLoopCnt(uint64_t loopCnt);
+    void ClearRealtimeInfo();
+    void AppendTraceInfo();
+    void TraceInfoSummary();
+    void Reset();
 };
 
 #endif

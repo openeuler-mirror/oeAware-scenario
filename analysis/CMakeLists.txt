@@ -10,7 +10,7 @@ set(analysis_src
     analysis/env.cpp
 )
 
-set(oeaware_src adapt/oeAware_adapt.cpp)
+set(oeaware_src adapt/oeaware_adapt.cpp)
 
 add_compile_options(-g -fPIC -Wall -Wextra)
 
