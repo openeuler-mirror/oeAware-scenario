@@ -20,6 +20,10 @@ void TraceInfoSummary(const std::vector<TaskInfo> &infos, TaskInfo &summary)
                 summary.access[i][j] += info.access[i][j];
             }
         }
+        for (size_t i = 0; i < info.netInfo.netRxTimes.size(); i++) {
+            summary.netInfo.netRxTimes[i] += info.netInfo.netRxTimes[i];
+        }
+        summary.netInfo.netRxSum += info.netInfo.netRxSum;
         summary.cycles += info.cycles;
     }
     summary.loopCnt = infos.size();
@@ -39,6 +43,7 @@ void TaskInfo::Init()
     for (int i = 0; i < numaNum; i++) {
         access[i].resize(numaNum);
     }
+    netInfo.Init();
 }
 
 void TaskInfo::CalculateNumaScore()
@@ -65,6 +70,7 @@ void TaskInfo::ClearData()
     cycles = 0;
     accessSum = 0;
     accessCost = 0;
+    netInfo.ClearData();
 }
 
 void Proc::SummaryThreads()
@@ -180,4 +186,18 @@ void SystemInfo::Reset()
     realtimeInfo.ClearData();
     summaryInfo.ClearData();
     traceInfo.clear();
+}
+
+void NetworkInfo::Init()
+{
+    int numaNum = Env::GetInstance().numaNum;
+    netRxTimes.resize(numaNum);
+}
+
+void NetworkInfo::ClearData()
+{
+    netRxSum = 0;
+    for (auto &tmp : netRxTimes) {
+        tmp = 0;
+    }
 }

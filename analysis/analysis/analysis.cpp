@@ -16,9 +16,11 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+
 const int TUNE_PID_LOW_BOUND = 1000;
 const uint64_t ACCESS_THRESHOLD = 200;
 const float NUMA_SCORE_THRESHOLD = 0.95;
+const int NET_RX_THRESHOLD = 100;
 static bool IsValidPmu(const PmuData &data)
 {
     return data.pid > TUNE_PID_LOW_BOUND && data.tid > TUNE_PID_LOW_BOUND;
@@ -47,6 +49,8 @@ void Analysis::UpdatePmu(const std::string &eventName, int dataLen, const PmuDat
     if (eventName == "pmu_spe_sampling") {
         UpdateSpe(dataLen, data);
         UpdateAccess();
+    } else if (eventName == "pmu_netif_rx_counting") {
+        UpdateNetRx(dataLen, data);
     }
 }
 
@@ -54,6 +58,8 @@ void Analysis::InstanceInit()
 {
     tuneInstances[NUMA_TUNE].name = "tune_numa_mem_access";
     tuneInstances[IRQ_TUNE].name = "tune_irq";
+    tuneInstances[GAZELLE_TUNE].name = "gazelle";
+    tuneInstances[SMC_TUNE].name = "smc_tune";
 }
 
 void Analysis::UpdateSpe(int dataLen, const PmuData *data)
@@ -92,6 +98,15 @@ void Analysis::UpdateAccess()
     }
 }
 
+void Analysis::UpdateNetRx(int dataLen, const PmuData *data)
+{
+    auto &info = sysInfo.realtimeInfo.netInfo;
+    for (int i = 0; i < dataLen; i++) {
+        info.netRxTimes[env.cpu2Node[data[i].cpu]] += data[i].count;
+        info.netRxSum += data[i].count;
+    }
+}
+
 void Analysis::ShowSummary()
 {
     std::cout << "============================ Analysis Summary ==============================" << std::endl;
@@ -113,6 +128,7 @@ void Analysis::ShowSummary()
         std::cout << std::left << std::setw(suggestWidth) << (ins.suggest ? "Yes" : "No") << " | ";
         std::cout << std::left << std::setw(notesWidth) << ins.notes << " |" << std::endl;
     }
+    ShowNetInfoSummary();
     std::cout << "Note : analysis plugin period is " << GetPeriod() << " ms, loop " << loopCnt << " times" << std::endl;
 }
 
@@ -125,7 +141,7 @@ void Analysis::NumaTuneSuggest(const TaskInfo &taskInfo, bool isSummary)
     }
 
     if (isSummary && taskInfo.loopCnt == 0) {
-        tuneInstances[NUMA_TUNE].notes = "loop cnt error";
+        tuneInstances[NUMA_TUNE].notes = "Loop count error";
         return;
     }
     uint64_t accessSum = isSummary ? ceil(taskInfo.accessSum * 1.0 / taskInfo.loopCnt) : taskInfo.accessSum;
@@ -144,10 +160,64 @@ void Analysis::NumaTuneSuggest(const TaskInfo &taskInfo, bool isSummary)
     tuneInstances[NUMA_TUNE].notes = "Gap : " + tmp.str() + "%";
 }
 
+static bool IsFrequentLocalNetAccess(uint64_t times)
+{
+    return times > NET_RX_THRESHOLD;
+}
+
+void Analysis::NetTuneSuggest(const TaskInfo &taskInfo, bool isSummary)
+{
+    tuneInstances[IRQ_TUNE].suggest = false;
+    tuneInstances[GAZELLE_TUNE].suggest = false;
+    tuneInstances[SMC_TUNE].suggest = false;
+    if (isSummary && taskInfo.loopCnt == 0) {
+        tuneInstances[IRQ_TUNE].notes = "Loop count error";
+        tuneInstances[GAZELLE_TUNE].notes = "Loop count error";
+        tuneInstances[SMC_TUNE].notes = "Loop count error";
+        return;
+    }
+    const auto &netInfo = taskInfo.netInfo;
+    uint64_t times = isSummary ? ceil(netInfo.netRxSum * 1.0 / loopCnt) : netInfo.netRxSum;
+    if (!IsFrequentLocalNetAccess(times)) {
+        tuneInstances[IRQ_TUNE].notes = "No local Newtwork access";
+        tuneInstances[GAZELLE_TUNE].notes = "No local Newtwork access";
+        tuneInstances[SMC_TUNE].notes = "No local Newtwork access";
+        return;
+    }
+    tuneInstances[IRQ_TUNE].suggest = true;
+    tuneInstances[GAZELLE_TUNE].suggest = true;
+    tuneInstances[SMC_TUNE].suggest = true;
+    tuneInstances[IRQ_TUNE].notes = "Refer to network information";
+    tuneInstances[GAZELLE_TUNE].notes = "Refer to network information";
+    tuneInstances[SMC_TUNE].notes = "Refer to network information";
+}
+
 void Analysis::Summary()
 {
     sysInfo.TraceInfoSummary();
     NumaTuneSuggest(sysInfo.summaryInfo, true);
+    NetTuneSuggest(sysInfo.summaryInfo, true);
+}
+
+void Analysis::ShowNetInfoSummary()
+{
+    std::cout << "============================ Network Summary ==============================" << std::endl;
+    // Display network traffic in the future
+    std::cout << " Local network communication distribution " << std::endl;
+    const auto &netInfo = sysInfo.summaryInfo.netInfo;
+    std::cout << "  ";
+    for (size_t n = 0; n < netInfo.netRxTimes.size(); n++) {
+        std::cout << "Node" << std::to_string(n) << "   ";
+    }
+    std::cout << std::endl;
+    for (size_t n = 0; n < netInfo.netRxTimes.size(); n++) {
+        std::ostringstream tmp;
+        // 2 is used for precision, 6 is used for width
+        tmp << std::fixed << std::setprecision(2) << std::setw(6) << std::setfill(' ') \
+            << (netInfo.netRxTimes[n] * 1.0 / netInfo.netRxSum * 100); // 100 is used for percentage conversion
+        std::cout << tmp.str() << "% ";
+    }
+    std::cout << std::endl;
 }
 
 void Analysis::Analyze()
