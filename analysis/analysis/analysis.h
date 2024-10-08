@@ -22,6 +22,7 @@ enum InstanceName {
     NUMA_TUNE,
     IRQ_TUNE,
     GAZELLE_TUNE,
+    SMC_TUNE,
 };
 
 struct Instance {
@@ -38,8 +39,11 @@ private:
     void InstanceInit();
     void UpdateSpe(int dataLen, const PmuData *data);
     void UpdateAccess();
+    void UpdateNetRx(int dataLen, const PmuData *data);
     void NumaTuneSuggest(const TaskInfo &taskInfo, bool isSummary);
+    void NetTuneSuggest(const TaskInfo &taskInfo, bool isSummary);
     void Summary();
+    void ShowNetInfoSummary();
     void ShowSummary();
 public:
     Env &env = Env::GetInstance();

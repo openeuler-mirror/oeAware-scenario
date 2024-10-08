@@ -17,6 +17,14 @@
 #include <unordered_map>
 #include "env.h"
 #include <string>
+
+struct NetworkInfo {
+    void Init();
+    uint64_t netRxSum = 0;
+    std::vector<uint64_t> netRxTimes; // local net info
+    void ClearData();
+};
+
 struct TaskInfo {
     TaskInfo();
     ~TaskInfo() = default;
@@ -27,6 +35,7 @@ struct TaskInfo {
     uint64_t accessSum = 0;
     uint64_t accessCost = 0;
     std::vector<std::vector<uint64_t>> access;
+    NetworkInfo netInfo; // only statistics system info temporarily
     void CalculateNumaScore();
     void ClearData();
 };

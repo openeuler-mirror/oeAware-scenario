@@ -45,6 +45,8 @@ static const char *GetDep()
     g_deps = PMU_SPE;
     g_deps += "-";
     g_deps += PMU_CYCLES_SAMPLING;
+    g_deps += "-";
+    g_deps += PMU_NETIF_RX;
     return g_deps.c_str();
 }
 
@@ -108,15 +110,17 @@ static void UpdatePmu()
 {
     int speBufNum = GetRingBufNum(PMU_SPE);
     // spe and cycles should have same ring buf num
-    if (speBufNum != 0 && speBufNum == GetRingBufNum(PMU_CYCLES_SAMPLING)) {
+    if (speBufNum != 0 && speBufNum == GetRingBufNum(PMU_CYCLES_SAMPLING) && speBufNum == GetRingBufNum(PMU_NETIF_RX)) {
         for (int n = 0; n < speBufNum; ++n) {
             UpdateBufNPmu(n, PMU_CYCLES_SAMPLING);
             UpdateBufNPmu(n, PMU_SPE);
+            UpdateBufNPmu(n, PMU_NETIF_RX);
             // to do something after update spe and cycles every time
         }
     }
     UpdateBufCnt(PMU_SPE);
     UpdateBufCnt(PMU_CYCLES_SAMPLING);
+    UpdateBufCnt(PMU_NETIF_RX);
 }
 
 static void Run(const Param *param)
