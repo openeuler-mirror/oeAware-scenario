@@ -47,6 +47,10 @@ static const char *GetDep()
     g_deps += PMU_CYCLES_SAMPLING;
     g_deps += "-";
     g_deps += PMU_NETIF_RX;
+    g_deps += "-";
+    g_deps += PMU_SKB_COPY_DATEGRAM_IOVEC;
+    g_deps += "-";
+    g_deps += PMU_NAPI_GRO_REC_ENTRY;
     return g_deps.c_str();
 }
 
@@ -110,17 +114,24 @@ static void UpdatePmu()
 {
     int speBufNum = GetRingBufNum(PMU_SPE);
     // spe and cycles should have same ring buf num
-    if (speBufNum != 0 && speBufNum == GetRingBufNum(PMU_CYCLES_SAMPLING) && speBufNum == GetRingBufNum(PMU_NETIF_RX)) {
+    if (speBufNum != 0 && speBufNum == GetRingBufNum(PMU_CYCLES_SAMPLING)
+        && speBufNum == GetRingBufNum(PMU_NETIF_RX)
+        && speBufNum == GetRingBufNum(PMU_SKB_COPY_DATEGRAM_IOVEC)
+        && speBufNum == GetRingBufNum(PMU_NAPI_GRO_REC_ENTRY)) {
         for (int n = 0; n < speBufNum; ++n) {
             UpdateBufNPmu(n, PMU_CYCLES_SAMPLING);
             UpdateBufNPmu(n, PMU_SPE);
             UpdateBufNPmu(n, PMU_NETIF_RX);
+            UpdateBufNPmu(n, PMU_SKB_COPY_DATEGRAM_IOVEC);
+            UpdateBufNPmu(n, PMU_NAPI_GRO_REC_ENTRY);
             // to do something after update spe and cycles every time
         }
     }
     UpdateBufCnt(PMU_SPE);
     UpdateBufCnt(PMU_CYCLES_SAMPLING);
     UpdateBufCnt(PMU_NETIF_RX);
+    UpdateBufCnt(PMU_SKB_COPY_DATEGRAM_IOVEC);
+    UpdateBufCnt(PMU_NAPI_GRO_REC_ENTRY);
 }
 
 static void Run(const Param *param)

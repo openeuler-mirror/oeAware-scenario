@@ -12,16 +12,17 @@ set(analysis_src
 
 set(oeaware_src adapt/oeaware_adapt.cpp)
 
-add_compile_options(-g -fPIC -Wall -Wextra)
+add_compile_options(-O2 -fPIC -Wall -Wextra)
 
 add_library(analysis_base OBJECT ${analysis_src})
 target_include_directories(analysis_base PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/analysis
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
     ${LIB_KPERF_INCPATH}
 )
 
 
-target_link_libraries(analysis_base numa)
+target_link_libraries(analysis_base numa boundscheck)
 
 add_library(analysis_oeaware SHARED ${oeaware_src})
 target_include_directories(analysis_oeaware PUBLIC
