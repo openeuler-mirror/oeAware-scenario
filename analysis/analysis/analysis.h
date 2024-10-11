@@ -18,6 +18,22 @@
 #include <vector>
 #include "env.h"
 
+struct RecNetQueue {
+    uint64_t ts;
+    const void *skbaddr;
+    uint32_t core;
+    std::string dev;
+    uint64_t queueMapping;
+};
+
+struct RecNetThreads {
+    uint64_t ts;
+    uint32_t core;
+    int pid;
+    int tid;
+    const void *skbaddr;
+};
+
 enum InstanceName {
     NUMA_TUNE,
     IRQ_TUNE,
@@ -35,11 +51,17 @@ class Analysis {
 private:
     SystemInfo sysInfo;
     std::unordered_map<InstanceName, Instance> tuneInstances;
+    std::vector<RecNetQueue> recNetQueue;
+    std::vector<RecNetThreads> recNetThreads;
     uint64_t loopCnt = 0;
     void InstanceInit();
     void UpdateSpe(int dataLen, const PmuData *data);
     void UpdateAccess();
     void UpdateNetRx(int dataLen, const PmuData *data);
+    void UpdateNapiGroRec(int dataLen, const PmuData *data);
+    void UpdateSkbCopyDataIovec(int dataLen, const PmuData *data);
+    void UpdateRemoteNetInfo(const RecNetQueue &queData, const RecNetThreads &threadData);
+    void UpdateRecNetQueue();
     void NumaTuneSuggest(const TaskInfo &taskInfo, bool isSummary);
     void NetTuneSuggest(const TaskInfo &taskInfo, bool isSummary);
     void Summary();

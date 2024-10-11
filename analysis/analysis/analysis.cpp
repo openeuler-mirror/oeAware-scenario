@@ -16,11 +16,14 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+#include "pmu_plugin.h"
 
 const int TUNE_PID_LOW_BOUND = 1000;
 const uint64_t ACCESS_THRESHOLD = 200;
 const float NUMA_SCORE_THRESHOLD = 0.95;
 const int NET_RX_THRESHOLD = 100;
+const int NET_RX_RECEIVE_SAMPLE_PERIOD = 10;
+const int NET_REMOTE_RX_THRESHOLD = 100;
 static bool IsValidPmu(const PmuData &data)
 {
     return data.pid > TUNE_PID_LOW_BOUND && data.tid > TUNE_PID_LOW_BOUND;
@@ -51,6 +54,10 @@ void Analysis::UpdatePmu(const std::string &eventName, int dataLen, const PmuDat
         UpdateAccess();
     } else if (eventName == "pmu_netif_rx_counting") {
         UpdateNetRx(dataLen, data);
+    } else if (eventName == "pmu_napi_gro_rec_entry") {
+        UpdateNapiGroRec(dataLen, data);
+    } else if (eventName == "pmu_skb_copy_datagram_iovec") {
+        UpdateSkbCopyDataIovec(dataLen, data);
     }
 }
 
@@ -105,6 +112,75 @@ void Analysis::UpdateNetRx(int dataLen, const PmuData *data)
         info.netRxTimes[env.cpu2Node[data[i].cpu]] += data[i].count;
         info.netRxSum += data[i].count;
     }
+}
+
+void Analysis::UpdateNapiGroRec(int dataLen, const PmuData *data)
+{
+    RecNetQueue unit;
+    NapiGroRecEntryData tmpData;
+    for (int i = 0; i < dataLen; i++) {
+        if (NapiGroRecEntryResolve(data[i].rawData->data, &tmpData)) {
+            continue;
+        }
+        unit.core = data[i].cpu;
+        unit.dev = std::string(tmpData.deviceName);
+        unit.queueMapping = tmpData.queueMapping - 1;
+        unit.ts = data[i].ts;
+        unit.skbaddr = tmpData.skbaddr;
+        recNetQueue.emplace_back(unit);
+    }
+}
+
+void Analysis::UpdateSkbCopyDataIovec(int dataLen, const PmuData *data)
+{
+    RecNetThreads unit;
+    SkbCopyDatagramIovecData tmpData;
+    for (int i = 0; i < dataLen; i++) {
+        if (SkbCopyDatagramIovecResolve(data[i].rawData->data, &tmpData)) {
+            continue;
+        }
+        unit.core = data[i].cpu;
+        unit.ts = data[i].ts;
+        unit.pid = data[i].pid;
+        unit.tid = data[i].tid;
+        unit.skbaddr = tmpData.skbaddr;
+        recNetThreads.emplace_back(unit);
+    }
+}
+void Analysis::UpdateRemoteNetInfo(const RecNetQueue &queData, const RecNetThreads &threadData)
+{
+    const std::vector<int> &cpu2Node = env.cpu2Node;
+    int pid = threadData.pid;
+    int tid = threadData.tid;
+    uint8_t threadsNode = cpu2Node[threadData.core];
+    uint8_t irqNode = cpu2Node[queData.core];
+    auto &procs = sysInfo.procs;
+    procs[pid].threads[tid].realtimeInfo.netInfo.rxTimes[queData.dev][queData.queueMapping][threadsNode][irqNode]++;
+}
+
+
+void Analysis::UpdateRecNetQueue()
+{
+    size_t id = 0, idNext = 0, matchTimes = 0;
+    for (const auto &queueData : recNetQueue) {
+        for (size_t j = id; j < recNetThreads.size(); ++j) {
+            if (recNetThreads[j].ts >= queueData.ts) {
+                idNext = j;
+                break;
+            }
+        }
+        id = idNext;
+        // 200 : sliding window length
+        for (size_t j = id; j < recNetThreads.size() && j < id + 200; ++j) {
+            if (queueData.skbaddr == recNetThreads[j].skbaddr) {
+                UpdateRemoteNetInfo(queueData, recNetThreads[j]);
+                ++matchTimes;
+                break;
+            }
+        }
+    }
+    recNetQueue.clear();
+    recNetThreads.clear();
 }
 
 void Analysis::ShowSummary()
@@ -165,6 +241,11 @@ static bool IsFrequentLocalNetAccess(uint64_t times)
     return times > NET_RX_THRESHOLD;
 }
 
+static bool IsFrequentRemoteRecNetAccess(uint64_t times)
+{
+    return times > NET_REMOTE_RX_THRESHOLD;
+}
+
 void Analysis::NetTuneSuggest(const TaskInfo &taskInfo, bool isSummary)
 {
     tuneInstances[IRQ_TUNE].suggest = false;
@@ -178,18 +259,20 @@ void Analysis::NetTuneSuggest(const TaskInfo &taskInfo, bool isSummary)
     }
     const auto &netInfo = taskInfo.netInfo;
     uint64_t times = isSummary ? ceil(netInfo.netRxSum * 1.0 / loopCnt) : netInfo.netRxSum;
-    if (!IsFrequentLocalNetAccess(times)) {
-        tuneInstances[IRQ_TUNE].notes = "No local Newtwork access";
-        tuneInstances[GAZELLE_TUNE].notes = "No local Newtwork access";
-        tuneInstances[SMC_TUNE].notes = "No local Newtwork access";
-        return;
+    uint64_t remoteRxtimes = isSummary ? \
+        ceil(netInfo.remoteRxSum * NET_RX_RECEIVE_SAMPLE_PERIOD * 1.0 / loopCnt) : netInfo.remoteRxSum;
+    if (IsFrequentLocalNetAccess(times) || IsFrequentRemoteRecNetAccess(remoteRxtimes)) {
+        tuneInstances[IRQ_TUNE].suggest = true;
+        tuneInstances[GAZELLE_TUNE].suggest = true;
+        tuneInstances[SMC_TUNE].suggest = true;
+        tuneInstances[IRQ_TUNE].notes = "Refer to network information";
+        tuneInstances[GAZELLE_TUNE].notes = "Refer to network information";
+        tuneInstances[SMC_TUNE].notes = "Refer to network information";
+    } else {
+        tuneInstances[IRQ_TUNE].notes = "No network access";
+        tuneInstances[GAZELLE_TUNE].notes = "No network access";
+        tuneInstances[SMC_TUNE].notes = "No network access";
     }
-    tuneInstances[IRQ_TUNE].suggest = true;
-    tuneInstances[GAZELLE_TUNE].suggest = true;
-    tuneInstances[SMC_TUNE].suggest = true;
-    tuneInstances[IRQ_TUNE].notes = "Refer to network information";
-    tuneInstances[GAZELLE_TUNE].notes = "Refer to network information";
-    tuneInstances[SMC_TUNE].notes = "Refer to network information";
 }
 
 void Analysis::Summary()
@@ -218,12 +301,36 @@ void Analysis::ShowNetInfoSummary()
         std::cout << tmp.str() << "% ";
     }
     std::cout << std::endl;
+    std::cout << " Remote network communication distribution(receive) " << std::endl;
+    std::vector<std::vector<uint64_t>> remoteRxTimes(env.numaNum, std::vector<uint64_t>(env.numaNum, 0));
+    netInfo.Node2NodeRxTimes(remoteRxTimes);
+    std::cout << " matrix representation of network thread nodes to irq nodes" << std::endl;
+    std::cout << "         ";
+    for (size_t n = 0; n < remoteRxTimes.size(); n++) {
+        std::cout << "Node" << std::to_string(n) << "   ";
+    }
+    std::cout << std::endl;
+    for (size_t n = 0; n < remoteRxTimes.size(); n++) {
+        std::cout << " Node" << std::to_string(n) << " ";
+        for (size_t m = 0; m < remoteRxTimes[n].size(); m++) {
+            std::ostringstream tmp;
+            // 2 is used for precision, 6 is used for width
+            tmp << std::fixed << std::setprecision(2) << std::setw(6) << std::setfill(' ') \
+                << remoteRxTimes[n][m] * 100.0 / netInfo.remoteRxSum;  // 100.0 is used for percentage conversion
+            std::cout << tmp.str() << "% ";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << "remote network receive " << \
+        netInfo.remoteRxSum * NET_RX_RECEIVE_SAMPLE_PERIOD << " packets. " << std::endl;
 }
 
 void Analysis::Analyze()
 {
+    UpdateRecNetQueue();
     sysInfo.SummaryProcs();
     sysInfo.CalculateNumaScore();
+    sysInfo.SummaryProcsNetInfo();
     sysInfo.SetLoopCnt(loopCnt);
     sysInfo.AppendTraceInfo();
     sysInfo.ClearRealtimeInfo();
