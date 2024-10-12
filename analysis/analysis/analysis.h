@@ -39,6 +39,7 @@ enum InstanceName {
     IRQ_TUNE,
     GAZELLE_TUNE,
     SMC_TUNE,
+    STEALTASK_TUNE,
 };
 
 struct Instance {
@@ -57,6 +58,7 @@ private:
     void InstanceInit();
     void UpdateSpe(int dataLen, const PmuData *data);
     void UpdateAccess();
+    void UpdateCyclesSample(int dataLen, const PmuData *data);
     void UpdateNetRx(int dataLen, const PmuData *data);
     void UpdateNapiGroRec(int dataLen, const PmuData *data);
     void UpdateSkbCopyDataIovec(int dataLen, const PmuData *data);
@@ -64,6 +66,7 @@ private:
     void UpdateRecNetQueue();
     void NumaTuneSuggest(const TaskInfo &taskInfo, bool isSummary);
     void NetTuneSuggest(const TaskInfo &taskInfo, bool isSummary);
+    void StealTaskTuneSuggest(const TaskInfo &taskInfo, bool isSummary);
     void Summary();
     void ShowNetInfoSummary();
     void ShowSummary();

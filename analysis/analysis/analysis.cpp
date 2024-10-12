@@ -24,6 +24,8 @@ const float NUMA_SCORE_THRESHOLD = 0.95;
 const int NET_RX_THRESHOLD = 100;
 const int NET_RX_RECEIVE_SAMPLE_PERIOD = 10;
 const int NET_REMOTE_RX_THRESHOLD = 100;
+const float STEAL_TASK_CYCLES_THRESHOLD = 0.8;
+const int MS_PER_SEC = 1000;
 static bool IsValidPmu(const PmuData &data)
 {
     return data.pid > TUNE_PID_LOW_BOUND && data.tid > TUNE_PID_LOW_BOUND;
@@ -36,7 +38,7 @@ static bool IsValidSpe(const PmuData &data)
 
 int Analysis::GetPeriod()
 {
-    return 1000; // 1000 ms
+    return 1 * MS_PER_SEC;
 }
 
 void Analysis::Init()
@@ -58,6 +60,8 @@ void Analysis::UpdatePmu(const std::string &eventName, int dataLen, const PmuDat
         UpdateNapiGroRec(dataLen, data);
     } else if (eventName == "pmu_skb_copy_datagram_iovec") {
         UpdateSkbCopyDataIovec(dataLen, data);
+    } else if (eventName == "pmu_cycles_sampling") {
+        UpdateCyclesSample(dataLen, data);
     }
 }
 
@@ -67,6 +71,7 @@ void Analysis::InstanceInit()
     tuneInstances[IRQ_TUNE].name = "tune_irq";
     tuneInstances[GAZELLE_TUNE].name = "gazelle";
     tuneInstances[SMC_TUNE].name = "smc_tune";
+    tuneInstances[STEALTASK_TUNE].name = "stealtask_tune";
 }
 
 void Analysis::UpdateSpe(int dataLen, const PmuData *data)
@@ -102,6 +107,17 @@ void Analysis::UpdateAccess()
         }
         proc.pageVa.clear();
         proc.speBuff.clear();
+    }
+}
+
+void Analysis::UpdateCyclesSample(int dataLen, const PmuData *data)
+{
+    auto &procs = sysInfo.procs;
+    for (int i = 0; i < dataLen; i++) {
+        if (!IsValidPmu(data[i])) {
+            continue;
+        }
+        procs[data[i].pid].threads[data[i].tid].realtimeInfo.cycles += data[i].period;
     }
 }
 
@@ -275,11 +291,31 @@ void Analysis::NetTuneSuggest(const TaskInfo &taskInfo, bool isSummary)
     }
 }
 
+void Analysis::StealTaskTuneSuggest(const TaskInfo &taskInfo, bool isSummary)
+{
+    tuneInstances[STEALTASK_TUNE].suggest = false;
+    if (isSummary && taskInfo.loopCnt == 0) {
+        tuneInstances[STEALTASK_TUNE].notes = "Loop count error";
+        return;
+    }
+    uint64_t sysCyclesPerSecond = isSummary ? ceil(taskInfo.cycles * 1.0 / taskInfo.loopCnt) : taskInfo.cycles;
+    sysCyclesPerSecond = sysCyclesPerSecond / GetPeriod() * MS_PER_SEC; // later use real time
+    float cpuRatio = sysCyclesPerSecond * 1.0 / env.sysMaxCycles;
+    if (cpuRatio > STEAL_TASK_CYCLES_THRESHOLD) {
+        tuneInstances[STEALTASK_TUNE].suggest = true;
+    }
+    std::ostringstream tmp;
+    // 2 is used for precision, 6 is used for width, 100.0 is used for percentage conversion
+    tmp << std::fixed << std::setprecision(2) << std::setw(6) << std::setfill(' ') << cpuRatio * 100.0 << "%";
+    tuneInstances[STEALTASK_TUNE].notes = "CpuRatio(average) : " + tmp.str();
+}
+
 void Analysis::Summary()
 {
     sysInfo.TraceInfoSummary();
     NumaTuneSuggest(sysInfo.summaryInfo, true);
     NetTuneSuggest(sysInfo.summaryInfo, true);
+    StealTaskTuneSuggest(sysInfo.summaryInfo, true);
 }
 
 void Analysis::ShowNetInfoSummary()

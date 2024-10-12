@@ -31,11 +31,14 @@ public:
     Env(const Env &) = delete;
     Env &operator = (const Env &) = delete;
     // common para
+    bool initialized = false;
     int numaNum;
     int cpuNum;
     unsigned long pageMask = 0;
+    uint64_t sysMaxCycles = 0;
     std::vector<int> cpu2Node;
     std::vector<std::vector<int>> distance;
+    std::vector<uint64_t> cpuMaxCycles; // per second
     int maxDistance;
     int diffDistance;
     bool Init();
